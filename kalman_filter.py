@@ -22,7 +22,7 @@ def load_object_poses(file_path):
     obj_ids = set()
     for object_poses in frame_object_poses.values():
         for obj_id in object_poses.keys():
-                obj_ids.add(obj_id)
+            obj_ids.add(obj_id)
 
     object_poses = {}
     for obj_id in obj_ids:
