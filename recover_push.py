@@ -12,8 +12,8 @@ EXE_SEED = 32
 
 P = 10
 N_POINTS = 200
-SEARCH_RANGE = 0.2
-N_SAMPLE = 10
+SEARCH_RANGE = 0.1
+N_SAMPLE = 100
 
 rng = np.random.default_rng(seed=100)
 
@@ -238,7 +238,7 @@ def main():
         scenario['cube_friction'],
     )
 
-    with open("./april_tag_poses.json", "r") as f:
+    with open("./april_tag_poses_curve.json", "r") as f:
         desire_cube_poses = trans_coordinate(json.load(f))[:N_POINTS]
 
     # set exe_robot to somewhere near the first pose
@@ -295,7 +295,7 @@ def main():
         "all_forces": all_forces,
     }
 
-    with open("results_large_range.json", "w") as f:
+    with open("results_curve_100_samples.json", "w") as f:
         json.dump(save_results, f, indent=4)
 
 
