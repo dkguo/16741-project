@@ -22,7 +22,7 @@ if __name__ == '__main__':
     )
 
     # Load results
-    with open('results.json') as f:
+    with open('results_100_sample_0.1_range.json') as f:
         results = json.load(f)
 
     all_robot_pts, desire_cube_poses, all_forces = \

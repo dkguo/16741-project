@@ -74,7 +74,17 @@ def kalman_filter(poses, dt=1/30):
 
     # add ±2pi if diff from last point more than 1.8pi
     non_nan_angles = angles[~np.isnan(angles)].reshape((-1, 3))
-    print('non_zero', non_nan_angles[0])
+    for i in range(1, len(non_nan_angles)):
+        for j in range(len(non_nan_angles[0])):
+            if non_nan_angles[i][j] - non_nan_angles[i-1][j] > 1.8 * np.pi:
+                non_nan_angles[i][j] -= 2 * np.pi
+            elif non_nan_angles[i][j] - non_nan_angles[i - 1][j] < -1.8 * np.pi:
+                non_nan_angles[i][j] += 2 * np.pi
+    angles[~np.isnan(angles)] = non_nan_angles.reshape((-1))
+    # plt.plot(angles[:, 0], '-o')
+    # plt.plot(angles[:, 1], '-o')
+    # plt.plot(angles[:, 2], '-o')
+    # plt.show()
 
 
     exit()
