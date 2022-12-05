@@ -12,6 +12,8 @@ EXE_SEED = 32
 
 P = 10
 N_POINTS = 200
+SEARCH_RANGE = 0.2
+N_SAMPLE = 10
 
 rng = np.random.default_rng(seed=100)
 
@@ -184,19 +186,18 @@ def search_action_one_step(
     """
     # search next action
     # propose new robot pt and forces
-    num_search = 10
     contact_pt = get_robot_contact_pt([cube_pose])[0][:3, -1]
     # robot_pts = np.zeros((num_search, 3))
     # robot_pts[:,1:] = rng.random(size=(num_search, 2)) * 0.05 + contact_pt[1:]
     # robot_pts[:,0] = contact_pt[0]
-    robot_pts = rng.uniform(low=-0.1, high=0.1,
-                            size=(num_search, 3)) + contact_pt
+    robot_pts = rng.uniform(low=-SEARCH_RANGE, high=SEARCH_RANGE,
+                            size=(N_SAMPLE, 3)) + contact_pt
     robot_pts[0] -= P * prev_error
-    forces = rng.integers(low=100, high=200, size=num_search)
+    forces = rng.integers(low=100, high=200, size=N_SAMPLE)
 
     # prepare input for simulate_one_step
     inputs = []
-    for i in range(num_search):
+    for i in range(N_SAMPLE):
         inputs.append(('SIMULATE', robot_pts[i], forces[i], cube_pose,
                        robot_joint_angles, sim_env))
 
@@ -212,7 +213,7 @@ def search_action_one_step(
     min_error = np.inf
     opt_pt = None
     opt_force = None
-    for i in range(num_search):
+    for i in range(N_SAMPLE):
         new_cube_pose = results[i][0]
         errors = compute_traj_diff([new_cube_pose], [desired_cube_pose])
         if min_error > errors[0]:
@@ -294,7 +295,7 @@ def main():
         "all_forces": all_forces,
     }
 
-    with open("results.json", "w") as f:
+    with open("results_large_range.json", "w") as f:
         json.dump(save_results, f, indent=4)
 
 
