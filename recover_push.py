@@ -11,6 +11,7 @@ SIM_SEED = 100
 EXE_SEED = 32
 
 P = 10
+N_POINTS = 200
 
 rng = np.random.default_rng(seed=100)
 
@@ -270,7 +271,7 @@ if __name__ == "__main__":
     )
 
     with open("./april_tag_poses.json", "r") as f:
-        desire_cube_poses = trans_coordinate(json.load(f))[:10]
+        desire_cube_poses = trans_coordinate(json.load(f))[:N_POINTS]
 
     # set exe_robot to somewhere near the first pose
     robot_pt = get_robot_contact_pt(
@@ -286,6 +287,8 @@ if __name__ == "__main__":
 
     # loop through all poses
     robot_control_result = []
+    all_robot_pts = []
+    all_forces = []
     prev_error = 0
     for desire_cube_pose in desire_cube_poses:
         contact_pt = get_robot_contact_pt([cube_pose], x_offset=0.28)[0][:3,
@@ -298,6 +301,8 @@ if __name__ == "__main__":
             prev_error,
         )
         robot_control_result.append((robot_pt, force))
+        all_robot_pts.append(robot_pt.tolist())
+        all_forces.append(force.tolist())
         cube_pose, robot_joint_angles = simulate_one_step(
             'EXECUTE',
             robot_pt,
@@ -307,39 +312,48 @@ if __name__ == "__main__":
 
         prev_error = min_error
 
+    save_results = {
+        "all_robot_pts": all_robot_pts,
+        "desire_cube_poses": [pose.tolist() for pose in desire_cube_poses],
+        "all_forces": all_forces,
+    }
+
+    with open("results.json", "w") as f:
+        json.dump(save_results, f, indent=4)
+
     # Simulate final result
-    exe_env = m.Env(render=True)
-    exe_env.seed(EXE_SEED)
-    exe_robot, exe_cube, exe_true_cube = reset(
-        exe_env,
-        scenario['position'],
-        scenario['table_friction'],
-        scenario['cube_mass'],
-        scenario['cube_friction'],
-    )
+    # exe_env = m.Env(render=True)
+    # exe_env.seed(EXE_SEED)
+    # exe_robot, exe_cube, exe_true_cube = reset(
+    #     exe_env,
+    #     scenario['position'],
+    #     scenario['table_friction'],
+    #     scenario['cube_mass'],
+    #     scenario['cube_friction'],
+    # )
 
-    # set exe_robot to somewhere near the first pose
-    robot_pt = get_robot_contact_pt(
-        [desire_cube_poses[0]],
-        x_offset=0.5,
-    )[0][:3, -1]
-    cube_pose, robot_joint_angles = simulate_one_step(
-        'EXECUTE',
-        robot_pt,
-        force=100,
-        desire_cube_pose=desire_cube_poses[0],
-    )
+    # # set exe_robot to somewhere near the first pose
+    # robot_pt = get_robot_contact_pt(
+    #     [desire_cube_poses[0]],
+    #     x_offset=0.5,
+    # )[0][:3, -1]
+    # cube_pose, robot_joint_angles = simulate_one_step(
+    #     'EXECUTE',
+    #     robot_pt,
+    #     force=100,
+    #     desire_cube_pose=desire_cube_poses[0],
+    # )
 
-    for (robot_pt, force), desire_cube_pose in zip(
-            robot_control_result,
-            desire_cube_poses,
-    ):
-        simulate_one_step(
-            'EXECUTE',
-            robot_pt,
-            force,
-            desire_cube_pose=desire_cube_pose,
-        )
+    # for (robot_pt, force), desire_cube_pose in zip(
+    #         robot_control_result,
+    #         desire_cube_poses,
+    # ):
+    #     simulate_one_step(
+    #         'EXECUTE',
+    #         robot_pt,
+    #         force,
+    #         desire_cube_pose=desire_cube_pose,
+    #     )
 
     # Investigate how the mass of the cube, the lateral_friction of the table, and the motor_force of the robot affects pushing the block.
 
