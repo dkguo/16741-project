@@ -15,10 +15,17 @@ N_POINTS = 200
 
 rng = np.random.default_rng(seed=100)
 
+scenario = dict(position=np.array([0.3, 0, 0.95]),
+                table_friction=0.5,
+                cube_mass=100,
+                cube_friction=0.5,
+                robot_force=50)
+
 
 def reset(env, position, table_friction=0.5, cube_mass=100, cube_friction=0.5):
     # Create environment and ground plane
     env.reset()
+    orient = m.get_quaternion([np.pi, 0, 0])
     ground = m.Ground()
 
     # Create table and cube
@@ -105,51 +112,17 @@ def compute_traj_diff(pred_traj, true_traj, weight=1):
     return mean_error, pose_error, ori_error
 
 
-# def compute_obj(force, seed):
-#     # Reset simulator
-#     env.seed(seed)
-#     robot, cube, true_cube = reset(
-#         scenario['position'],
-#         scenario['table_friction'],
-#         scenario['cube_mass'],
-#         scenario['cube_friction'],
-#     )
-
-#     target_joint_angles = robot.ik(robot.end_effector,
-#                                    target_pos=robot_pts[0][:3, -1],
-#                                    target_orient=orient,
-#                                    use_current_joint_angles=True)
-#     robot.set_joint_angles(target_joint_angles)
-
-#     pred_cube_poses = []
-#     for pose, robot_pt in zip(poses, robot_pts):
-#         R = pose[:3, :3]
-#         q = Rotation.from_matrix(R).as_quat()
-#         # cube.set_base_pos_orient(pose[:3,-1], q)
-#         true_cube.set_base_pos_orient(pose[:3, -1], q)
-
-#         target_joint_angles = robot.ik(robot.end_effector,
-#                                        target_pos=robot_pt[:3, -1],
-#                                        target_orient=orient,
-#                                        use_current_joint_angles=True)
-#         robot.control(target_joint_angles, forces=force)
-#         m.step_simulation(realtime=False)
-#         pred_cube_p, pred_cube_q = cube.get_base_pos_orient()
-#         R = Rotation.from_quat(pred_cube_q).as_matrix()
-#         T = np.r_[np.c_[R, pred_cube_p], np.array([[0, 0, 0, 1]])]
-#         pred_cube_poses.append(T)
-
-#     error = compute_traj_diff(pred_cube_poses, poses)
-#     print(f"Force = {force}, Error = {error}")
-#     return error, force
-
-
 def simulate_one_step(mode,
                       robot_pt,
                       force,
                       cube_pose=None,
                       robot_joint_angles=None,
-                      desire_cube_pose=None):
+                      sim_env=None,
+                      desire_cube_pose=None,
+                      exe_env=None,
+                      exe_robot=None,
+                      exe_cube=None,
+                      exe_true_cube=None):
     """
     :param cube_pose: from last step
     :param robot_joint_angles: from last step
@@ -183,7 +156,7 @@ def simulate_one_step(mode,
 
     target_joint_angles = robot.ik(robot.end_effector,
                                    target_pos=robot_pt,
-                                   target_orient=orient,
+                                   target_orient=m.get_quaternion([np.pi, 0, 0]),
                                    use_current_joint_angles=True)
     robot.control(target_joint_angles, forces=int(force))
     m.step_simulation(env=env)
@@ -196,10 +169,11 @@ def simulate_one_step(mode,
 
 
 def search_action_one_step(
-    cube_pose,
-    robot_joint_angles,
-    desired_cube_pose,
-    prev_error,
+        sim_env,
+        cube_pose,
+        robot_joint_angles,
+        desired_cube_pose,
+        prev_error,
 ):
     """
     :param cube_pose: from last step
@@ -221,11 +195,10 @@ def search_action_one_step(
     forces = rng.integers(low=100, high=200, size=num_search)
 
     # prepare input for simulate_one_step
-    # cube_pose, robot_joint_angles, robot_pt, force
     inputs = []
     for i in range(num_search):
         inputs.append(('SIMULATE', robot_pts[i], forces[i], cube_pose,
-                       robot_joint_angles))
+                       robot_joint_angles, sim_env))
 
     # Simulate each step
     pool = Pool(128)
@@ -251,15 +224,9 @@ def search_action_one_step(
     return opt_pt, opt_force, min_error
 
 
-if __name__ == "__main__":
+def main():
     # Create environment and ground plane
-    scenario = dict(position=np.array([0.3, 0, 0.95]),
-                    table_friction=0.5,
-                    cube_mass=100,
-                    cube_friction=0.5,
-                    robot_force=50)
     sim_env = m.Env(render=False)
-    orient = m.get_quaternion([np.pi, 0, 0])
     exe_env = m.Env(render=False)
     exe_env.seed(EXE_SEED)
     exe_robot, exe_cube, exe_true_cube = reset(
@@ -283,6 +250,10 @@ if __name__ == "__main__":
         robot_pt,
         force=100,
         desire_cube_pose=desire_cube_poses[0],
+        exe_env=exe_env,
+        exe_cube=exe_cube,
+        exe_robot=exe_robot,
+        exe_true_cube=exe_true_cube
     )
 
     # loop through all poses
@@ -292,9 +263,10 @@ if __name__ == "__main__":
     prev_error = 0
     for desire_cube_pose in desire_cube_poses:
         contact_pt = get_robot_contact_pt([cube_pose], x_offset=0.28)[0][:3,
-                                                                         -1]
+                     -1]
         print(f"Contact pt: {contact_pt}")
         robot_pt, force, min_error = search_action_one_step(
+            sim_env,
             cube_pose,
             robot_joint_angles,
             desire_cube_pose,
@@ -308,6 +280,10 @@ if __name__ == "__main__":
             robot_pt,
             force,
             desire_cube_pose=desire_cube_pose,
+            exe_env=exe_env,
+            exe_cube=exe_cube,
+            exe_robot=exe_robot,
+            exe_true_cube=exe_true_cube
         )
 
         prev_error = min_error
@@ -321,74 +297,6 @@ if __name__ == "__main__":
     with open("results.json", "w") as f:
         json.dump(save_results, f, indent=4)
 
-    # Simulate final result
-    # exe_env = m.Env(render=True)
-    # exe_env.seed(EXE_SEED)
-    # exe_robot, exe_cube, exe_true_cube = reset(
-    #     exe_env,
-    #     scenario['position'],
-    #     scenario['table_friction'],
-    #     scenario['cube_mass'],
-    #     scenario['cube_friction'],
-    # )
 
-    # # set exe_robot to somewhere near the first pose
-    # robot_pt = get_robot_contact_pt(
-    #     [desire_cube_poses[0]],
-    #     x_offset=0.5,
-    # )[0][:3, -1]
-    # cube_pose, robot_joint_angles = simulate_one_step(
-    #     'EXECUTE',
-    #     robot_pt,
-    #     force=100,
-    #     desire_cube_pose=desire_cube_poses[0],
-    # )
-
-    # for (robot_pt, force), desire_cube_pose in zip(
-    #         robot_control_result,
-    #         desire_cube_poses,
-    # ):
-    #     simulate_one_step(
-    #         'EXECUTE',
-    #         robot_pt,
-    #         force,
-    #         desire_cube_pose=desire_cube_pose,
-    #     )
-
-    # Investigate how the mass of the cube, the lateral_friction of the table, and the motor_force of the robot affects pushing the block.
-
-    # pool = Pool(128)
-
-    # results = pool.starmap(compute_obj, zip([100] * 20, range(20)))
-
-    # min_error = np.inf
-    # opt_force = None
-    # for error, force in results:
-    #     if min_error > error[0]:
-    #         min_error = error[0]
-    #         opt_force = force
-    # print(f"Optimal force = {opt_force} with error {min_error}")
-
-    # for force in range(100, 200):
-
-    # for i in range(300):
-    #     # Move the end effector to the left along a linear trajectory
-    #     if pos[0] > -0.2:
-    #         pos += np.array([-0.0025, 0, 0])
-    #     target_joint_angles = robot.ik(robot.end_effector,
-    #                                 target_pos=pos,
-    #                                 target_orient=orient,
-    #                                 use_current_joint_angles=True)
-    #     robot.control(target_joint_angles, forces=s['robot_force'])
-
-    #     m.step_simulation()
-
-    #     # Show contact normals
-    #     cp = robot.get_contact_points(bodyB=cube)
-    #     m.clear_all_visual_items()
-    #     if cp is not None:
-    #         for c in cp:
-    #             line = m.Line(c['posB'],
-    #                         np.array(c['posB']) +
-    #                         np.array(c['contact_normal']) * 0.2,
-    #                         rgb=[1, 0, 0])
+if __name__ == "__main__":
+    main()

@@ -59,21 +59,25 @@ def kalman_filter(poses, dt=1/30):
     for i, pose in enumerate(poses):
         if pose is not None:
             positions.append(pose[:3, -1])
-            print(Rotation.from_matrix(pose[:3, :3]).as_euler('XYZ', degrees=True))
+            print(Rotation.from_matrix(pose[:3, :3]).as_euler('XYZ'))
             angles.append(Rotation.from_matrix(pose[:3, :3]).as_euler('XYZ'))
         else:
             positions.append(np.array([np.nan, np.nan, np.nan]))
             angles.append(np.array([np.nan, np.nan, np.nan]))
 
-    # angles = np.array(angles)
+    angles = np.array(angles)
     # angles[angles < 0] += 2 * np.pi
-    # plt.plot(angles[:, 0])
-    # plt.plot(angles[:, 1])
-    # plt.plot(angles[:, 2])
+    # plt.plot(angles[:, 0], '-o')
+    # plt.plot(angles[:, 1], '-o')
+    # plt.plot(angles[:, 2], '-o')
     # plt.show()
 
+    # add ±2pi if diff from last point more than 1.8pi
+    non_nan_angles = angles[~np.isnan(angles)].reshape((-1, 3))
+    print('non_zero', non_nan_angles[0])
 
-    # exit()
+
+    exit()
     x0 = np.r_[xyzs[0][0], 0, 0, xyzs[0][1], 0, 0, xyzs[0][2], 0, 0]
     P0 = np.diag([500] * 9)
 
@@ -166,7 +170,6 @@ if __name__ == '__main__':
             first_none = i
     for i in range(len(poses)):
         if poses[i] is not None:
-            print(poses[i])
             poses[i] = np.linalg.inv(poses[first_none]) @ poses[i]
     # for object_id, poses in object_poses.items():
     # plot_poses(poses)

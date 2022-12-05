@@ -16,7 +16,7 @@ if __name__ == '__main__':
     poses = []
     for image_path in tqdm(image_paths):
         image = cv2.imread(image_path)
-        poses_errs, overlay = detect_april_tag(image, camera_params, tag_size)
+        poses_errs, overlay = detect_april_tag(image, camera_params, tag_size, visualize=True)
 
         found_pose = False
         for tag_id, pose, error in poses_errs:
