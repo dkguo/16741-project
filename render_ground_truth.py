@@ -69,7 +69,7 @@ def main():
         scenario['cube_friction'],
     )
 
-    with open("data/april_tag_poses.json", "r") as f:
+    with open("data/poses_straight.json", "r") as f:
         desire_cube_poses = trans_coordinate(json.load(f))[:N_POINTS]
 
     # wait 1000 step to adjust camera angle

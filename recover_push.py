@@ -238,7 +238,7 @@ def main():
         scenario['cube_friction'],
     )
 
-    with open("data/april_tag_poses_curve.json", "r") as f:
+    with open("data/poses_curve.json", "r") as f:
         desire_cube_poses = trans_coordinate(json.load(f))[:N_POINTS]
 
     # set exe_robot to somewhere near the first pose
