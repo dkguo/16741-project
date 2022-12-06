@@ -3,13 +3,13 @@ import json
 import numpy as np
 
 import mengine as m
-from recover_push import reset, get_robot_contact_pt, simulate_one_step, scenario
+from recover_push import reset, get_robot_contact_pt, simulate_one_step, scenario, compute_traj_diff
 
 EXE_SEED = 32
+results_file = 'results/results_straight_no_search_F100.json'
 
 
 if __name__ == '__main__':
-    # init_globals()
     exe_env = m.Env(render=True)
     orient = m.get_quaternion([np.pi, 0, 0])
     exe_env.seed(EXE_SEED)
@@ -21,11 +21,11 @@ if __name__ == '__main__':
         scenario['cube_friction'],
     )
 
-    for i in range(1000):
-        m.step_simulation(env=exe_env)
+    # for i in range(1000):
+    #     m.step_simulation(env=exe_env)
 
     # Load results
-    with open('results/results_100_sample_0.1_range.json') as f:
+    with open(results_file) as f:
         results = json.load(f)
 
     all_robot_pts, desire_cube_poses, all_forces = \
@@ -51,8 +51,9 @@ if __name__ == '__main__':
         exe_true_cube=exe_true_cube
     )
 
+    cube_poses = []
     for robot_pt, force, desire_cube_pose in zip(all_robot_pts, all_forces, desire_cube_poses):
-        simulate_one_step(
+        cube_pose, robot_joint_angles = simulate_one_step(
             'EXECUTE',
             robot_pt,
             force,
@@ -62,3 +63,7 @@ if __name__ == '__main__':
             exe_robot=exe_robot,
             exe_true_cube=exe_true_cube
         )
+        cube_poses.append(cube_pose)
+
+    error = compute_traj_diff(desire_cube_poses, cube_poses)
+    print(error)

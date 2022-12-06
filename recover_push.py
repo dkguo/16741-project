@@ -7,6 +7,7 @@ from multiprocessing import Pool
 
 OBJECT_ORI_POS_Z = 0.905
 RENDER = False
+SEARCH = False
 SIM_SEED = 100
 EXE_SEED = 32
 
@@ -22,6 +23,9 @@ scenario = dict(position=np.array([0.3, 0, 0.95]),
                 cube_mass=100,
                 cube_friction=0.5,
                 robot_force=50)
+
+poses_file = "data/poses_straight.json"
+save_results_file = "results/results_straight_no_search_F100.json"
 
 
 def reset(env, position, table_friction=0.5, cube_mass=100, cube_friction=0.5):
@@ -238,7 +242,7 @@ def main():
         scenario['cube_friction'],
     )
 
-    with open("data/poses_curve.json", "r") as f:
+    with open(poses_file, "r") as f:
         desire_cube_poses = trans_coordinate(json.load(f))[:N_POINTS]
 
     # set exe_robot to somewhere near the first pose
@@ -261,21 +265,25 @@ def main():
     robot_control_result = []
     all_robot_pts = []
     all_forces = []
+    actual_cube_poses = []
+    simulate_min_errors = []
     prev_error = 0
     for desire_cube_pose in desire_cube_poses:
-        contact_pt = get_robot_contact_pt([cube_pose], x_offset=0.28)[0][:3,
-                     -1]
+        contact_pt = get_robot_contact_pt([cube_pose], x_offset=0.28)[0][:3, -1]
         print(f"Contact pt: {contact_pt}")
-        robot_pt, force, min_error = search_action_one_step(
-            sim_env,
-            cube_pose,
-            robot_joint_angles,
-            desire_cube_pose,
-            prev_error,
-        )
-        robot_control_result.append((robot_pt, force))
-        all_robot_pts.append(robot_pt.tolist())
-        all_forces.append(force.tolist())
+        if SEARCH:
+            robot_pt, force, min_error = search_action_one_step(
+                sim_env,
+                cube_pose,
+                robot_joint_angles,
+                desire_cube_pose,
+                prev_error,
+            )
+        else:
+            robot_pt = get_robot_contact_pt([desire_cube_pose])[0][:3, -1]
+            force = 100
+            min_error = None
+
         cube_pose, robot_joint_angles = simulate_one_step(
             'EXECUTE',
             robot_pt,
@@ -287,15 +295,23 @@ def main():
             exe_true_cube=exe_true_cube
         )
 
+        robot_control_result.append((robot_pt, force))
+        all_robot_pts.append(robot_pt.tolist())
+        all_forces.append(force)
+        actual_cube_poses.append(cube_pose)
+        simulate_min_errors.append(min_error)
+
         prev_error = min_error
 
     save_results = {
         "all_robot_pts": all_robot_pts,
         "desire_cube_poses": [pose.tolist() for pose in desire_cube_poses],
+        "actual_cube_poses": [pose.tolist() for pose in actual_cube_poses],
+        "simulate_min_errors": simulate_min_errors,
         "all_forces": all_forces,
     }
 
-    with open("results/results_curve_100_samples.json", "w") as f:
+    with open(save_results_file, "w") as f:
         json.dump(save_results, f, indent=4)
 
 
