@@ -21,8 +21,8 @@ if __name__ == '__main__':
         scenario['cube_friction'],
     )
 
-    # for i in range(1000):
-    #     m.step_simulation(env=exe_env)
+    for i in range(500):
+        m.step_simulation(env=exe_env)
 
     # Load results
     with open(results_file) as f:
