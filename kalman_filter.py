@@ -44,94 +44,94 @@ def load_object_poses(file_path):
     return object_poses
 
 
-def kalman_filter(poses, dt=1/30):
+def kalman_filter(poses, dt=1/30, P0=500.0, sq_sigma_a=100, r=1.0):
     """
     Apply linear kalman filter on poses.
     Poses are converted to position and euler angles: [x y z ex ey ez]
     :param poses: list of pose in homogenous matrix from frame 0 to end
     :param dt: delta time between two frames
+    :param P0: initial uncertainty of the first state
+    :param sq_sigma_a: random variance in acceleration
+    :param r: measurement uncertainty
 
     :return zs: estimated poses
     """
-
+    # poses to positions and euler angles
     positions = []
     angles = []
     for i, pose in enumerate(poses):
         if pose is not None:
             positions.append(pose[:3, -1])
-            print(Rotation.from_matrix(pose[:3, :3]).as_euler('XYZ'))
+            # print(Rotation.from_matrix(pose[:3, :3]).as_euler('XYZ'))
             angles.append(Rotation.from_matrix(pose[:3, :3]).as_euler('XYZ'))
         else:
             positions.append(np.array([np.nan, np.nan, np.nan]))
             angles.append(np.array([np.nan, np.nan, np.nan]))
-
+    positions = np.array(positions)
     angles = np.array(angles)
-    # angles[angles < 0] += 2 * np.pi
-    # plt.plot(angles[:, 0], '-o')
-    # plt.plot(angles[:, 1], '-o')
-    # plt.plot(angles[:, 2], '-o')
-    # plt.show()
 
     # add ±2pi if diff from last point more than 1.8pi
-    non_nan_angles = angles[~np.isnan(angles)].reshape((-1, 3))
-    for i in range(1, len(non_nan_angles)):
-        for j in range(len(non_nan_angles[0])):
-            if non_nan_angles[i][j] - non_nan_angles[i-1][j] > 1.8 * np.pi:
-                non_nan_angles[i][j] -= 2 * np.pi
-            elif non_nan_angles[i][j] - non_nan_angles[i - 1][j] < -1.8 * np.pi:
-                non_nan_angles[i][j] += 2 * np.pi
-    angles[~np.isnan(angles)] = non_nan_angles.reshape((-1))
+    not_nan_angles = angles[~np.isnan(angles)].reshape((-1, 3))
+    for i in range(1, len(not_nan_angles)):
+        for j in range(len(not_nan_angles[0])):
+            if not_nan_angles[i][j] - not_nan_angles[i - 1][j] > 1.8 * np.pi:
+                not_nan_angles[i][j] -= 2 * np.pi
+            elif not_nan_angles[i][j] - not_nan_angles[i - 1][j] < -1.8 * np.pi:
+                not_nan_angles[i][j] += 2 * np.pi
+    angles[~np.isnan(angles)] = not_nan_angles.reshape((-1))
     # plt.plot(angles[:, 0], '-o')
     # plt.plot(angles[:, 1], '-o')
     # plt.plot(angles[:, 2], '-o')
     # plt.show()
 
+    # remove nan at the begining and in the end
+    not_nan_frames = np.nonzero(~np.isnan(positions[:, 0]))
+    positions = positions[np.min(not_nan_frames):np.max(not_nan_frames) + 1]
+    angles = angles[np.min(not_nan_frames):np.max(not_nan_frames) + 1]
 
-    exit()
-    x0 = np.r_[xyzs[0][0], 0, 0, xyzs[0][1], 0, 0, xyzs[0][2], 0, 0]
-    P0 = np.diag([500] * 9)
-
-    dt = 1 / 15
-
-    F1 = np.array([[1, dt, 0.5 * dt ** 2],
-                   [0, 1, dt],
-                   [0, 0, 1]])
-    F = np.zeros([9, 9])
-    F[:3, :3] = F1
-    F[3:6, 3:6] = F1
-    F[-3:, -3:] = F1
-
-    H = np.zeros([3, 9])
-    H[0, 0] = 1
-    H[1, 3] = 1
-    H[2, 6] = 1
-
-    # measurement uncertainty
-    ra = 1.0
-    R = np.diag([ra] * 3)
-
-    # process noise
-    Q1 = np.array([[dt ** 4 / 4, dt ** 3 / 2, dt ** 2 / 2],
-                   [dt ** 3 / 2, dt ** 2, dt],
-                   [dt ** 2 / 2, dt, 1]])
-    Q = np.zeros([9, 9])
-    Q[:3, :3] = Q1
-    Q[3:6, 3:6] = Q1
-    Q[-3:, -3:] = Q1
-    sq_sigma_a = 100
-    Q = sq_sigma_a * Q
-
-    n = len(xyzs)
+    # create variables
+    n = len(positions)
     x = [[None] * n] * (n + 1)
     P = [[None] * n] * (n + 1)
     K = [None] * n
     z = [None] * n
+
+    # state transition matrix F
+    F = np.array([[1, dt, 0.5 * dt ** 2],
+                  [0,  1,            dt],
+                  [0,  0,             1]])
+    F = np.kron(np.eye(6), F)
+
+    # process noise Q
+    Q = np.array([[dt ** 4 / 4, dt ** 3 / 2, dt ** 2 / 2],
+                  [dt ** 3 / 2,     dt ** 2,          dt],
+                  [dt ** 2 / 2,          dt,           1]])
+    Q = np.kron(np.eye(6), Q) * sq_sigma_a
+
+    # observation matrix H, z = H @ x + v
+    H = np.zeros([6, 18])
+    for i in range(6):
+        H[i, 3 * i] = 1
+
+    # measurement uncertainty
+    R = np.diag([r] * 6)
+
+    # state x initialization
+    x0 = np.zeros(18)
+    x0[np.arange(0, 9, 3)] = positions[0]
+    x0[np.arange(9, 18, 3)] = angles[0]
     x[0][0] = x0
-    P[0][0] = P0
+
+    # uncertainty P initializaiton
+    P[0][0] = np.kron(np.eye(6), np.full((3, 3), P0))
+
+    # first step
     x[1][0] = F @ x[0][0]
     P[1][0] = F @ P[0][0] @ F.T + Q
-    for i in range(1, len(xyzs)):
-        z[i] = xyzs[i]
+
+    # apply Kalman filter
+    for i in range(1, n):
+        z[i] = np.r_[positions[i], angles[i]]
 
         K[i] = (P[i][i - 1] @ H.T) @ np.linalg.pinv(H @ P[i][i - 1] @ H.T + R)
         x[i][i] = x[i][i - 1] + K[i] @ (z[i] - H @ x[i][i - 1])
@@ -140,8 +140,24 @@ def kalman_filter(poses, dt=1/30):
         x[i + 1][i] = F @ x[i][i]
         P[i + 1][i] = F @ P[i][i] @ F.T + Q
 
+    # get estimated states
+    est_z = np.zeros()
 
 
+def kalman_filter_constant_acc(zs, dt=1/30, P0=500.0, sq_sigma_a=100, r=1.0):
+    """
+    Apply linear kalman filter on measurements.
+    Measurements are independent.
+    :param zs: list of measurements, (n, d), cannot start or end with nan
+    :param dt: delta time between two frames
+    :param P0: initial uncertainty of the first state
+    :param sq_sigma_a: random variance in acceleration
+    :param r: measurement uncertainty
+
+    :return est_zs: estimated values after applying Kalman filter
+    """
+
+    pass
 
 
 def plot_poses(poses):

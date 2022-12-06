@@ -21,8 +21,11 @@ if __name__ == '__main__':
         scenario['cube_friction'],
     )
 
+    for i in range(1000):
+        m.step_simulation(env=exe_env)
+
     # Load results
-    with open('results_100_sample_0.1_range.json') as f:
+    with open('results/results_100_sample_0.1_range.json') as f:
         results = json.load(f)
 
     all_robot_pts, desire_cube_poses, all_forces = \

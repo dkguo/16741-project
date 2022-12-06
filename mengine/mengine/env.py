@@ -60,7 +60,7 @@ class Env:
         p.setGravity(self.gravity[0], self.gravity[1], self.gravity[2], physicsClientId=self.id)
         self.last_sim_time = time.time()
 
-    def set_gui_camera(self, look_at_pos=[0, 0, 0.75], distance=1, yaw=0, pitch=-30):
+    def set_gui_camera(self, look_at_pos=[0, 0, 0], distance=1, yaw=45, pitch=30):
         p.resetDebugVisualizerCamera(cameraDistance=distance, cameraYaw=yaw, cameraPitch=pitch, cameraTargetPosition=look_at_pos, physicsClientId=self.id)
 
     def slow_time(self):
